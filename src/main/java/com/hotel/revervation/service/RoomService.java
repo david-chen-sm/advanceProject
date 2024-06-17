@@ -2,7 +2,6 @@ package com.hotel.revervation.service;
 
 import java.util.List;
 import java.util.NoSuchElementException;
-import java.util.Objects;
 import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,20 +17,20 @@ import com.hotel.revervation.repository.RoomRepository;
 import io.micrometer.common.util.StringUtils;
 
 /**
- * This project is a demonstration of skills, understanding, and the use of Spring Boot functionalities.
- * Therefore, the return types might not strictly adhere to industry standards. It is intended to demonstrate
- * the use of exceptions, DTO objects, and ResponseEntity as return types to interact with the frontend
- * (e.g., Postman application).
+ * This project serves as a demonstration of skills, understanding, and the practical use of Spring Boot functionalities.
+ * The return types in this project may not strictly adhere to industry standards. Instead, the focus is on showcasing the
+ * implementation of exceptions handling, DTO objects, and ResponseEntity as return types for interaction with front-end
+ * applications (e.g., Postman). More detailed Javadoc comments are provided selectively for complex functions due to time constraints.
  */
 
 @Service
 public class RoomService {
 	
 	@Autowired
-	RoomRepository roomRepository;
+	private RoomRepository roomRepository;
 	
 	@Autowired
-	UserService userService;
+	private UserService userService;
 	
 	// Save Room
 	public Room saveRoom (Room room) {
@@ -45,6 +44,20 @@ public class RoomService {
 	
 	// Retrieve room by ID
 	public Room getRoomById(int id) {
+		/**
+	     * Retrieves a room from the database based on the provided room ID.
+	     * 
+	     * Args:
+	     *   int id: Id of the room to be retrieved.
+	     * 
+	     * Returns:
+	     *   Room: Room DTO object if it was found successfully with the provided ID.
+	     * 
+	     * Throws:
+	     *   NoSuchElementException: If no room is found with the provided ID.
+	     */
+		
+		// Retrieve room with id
 		Optional<Room> optional = roomRepository.findById(id);
 		return optional.orElseThrow(()-> new NoSuchElementException("Room not found with ID: " + id));
 	}
@@ -57,24 +70,36 @@ public class RoomService {
 	
 	// Update room
 	public Room updateRoom(Room room) {
-		// Front end will have PricePernight change, type change, or both changed.
+		/**
+	     * Method to update a room. Front-end may change PricePerNight, room type, or both.
+	     * 
+	     * Args:
+	     *   room (Room): DTO object containing ID and updated fields (PricePerNight, type).
+	     * 
+	     * Returns:
+	     *   Room: Updated DTO object when the update is successful.
+	     *   null: If no valid data is provided for the update.
+	     * 
+	     * Throws:
+	     *   NoSuchElementException: If no room is found with the provided ID.
+	     */
+
 		// Setting the update flag to false.
 		boolean update = false;
 		
 		// Check if the ID is correct
+		// NoSuchElementException exception will be thrown if room is not found with ID
 		Room dbRoom = getRoomById(room.getId());
-		if ( Objects.isNull(dbRoom)) {
-			// No room with the argument ID was found.
-			return dbRoom;
-		}
+				
+		// Room found with the ID
 		
-		// update PricePernight
+		// Update PricePerNight if valid value provided
 		if (room.getPricePernight() != null && room.getPricePernight() >= 0 ) {
 			dbRoom.setPricePernight(room.getPricePernight());
 			update = true;
 		}
 		
-		// update type
+		// Update room type if provided
 		if ( StringUtils.isNotBlank(room.getType())) {
 			dbRoom.setType(room.getType());
 			update = true;
@@ -85,8 +110,8 @@ public class RoomService {
 			return roomRepository.save(dbRoom);
 		}
 		
-		// return the room with the ID and no changes
-		return dbRoom;
+		// Return null when no valid data is provided for update.
+		return null;
 	}
 	
 	// Check availability of the room
@@ -107,18 +132,44 @@ public class RoomService {
 	}
 	
 	public ResponseEntity<String> reserveRoom(int userId, int roomId){
+		/**
+		 * Method to reserve a room for a specified user based on user and room IDs.
+		 * 
+		 * Args:
+		 *   int userId: ID of the user requesting the room reservation.
+		 *   int roomId: ID of the room to be reserved.
+		 * 
+		 * Returns:
+		 *   ResponseEntity<String>: ResponseEntity indicating the success or failure of the room reservation.
+		 *     - HttpStatus.NOT_FOUND if the room or user ID is not found.
+		 *     - ResponseEntity returned by roomCurrentlyUnavailable() if the room is currently unavailable.
+		 *     - ResponseEntity indicating successful room reservation if all checks pass.
+		 * 
+		 * Throws:
+		 *   None.
+		 */
 		// Null or empty values will be tackled in getRoomById or getUserById method
 		
-		// Getting the room info with the id
-		Room dbRoom = getRoomById(roomId);
-		// Getting the User info with the id
-		Users dbUsers = userService.getUserById(userId);
+		// Initialize room and user objects
+	    Room dbRoom = null;
+	    Users dbUsers = null;
 		
-		// Check if the room ID or User ID is correct
-		if ( Objects.isNull(dbRoom) || Objects.isNull(dbUsers)) {
-			// either room or user id are not found or both
+		// Getting the room info with the id
+		try {
+			dbRoom = getRoomById(roomId);
+		} catch (NoSuchElementException e) {
+			// No room is found with roomId
 			return createErrorResponse(HttpStatus.NOT_FOUND, 
-					"Room ID: "+roomId+" or User ID: "+userId+" not found.");
+					"Room ID: "+roomId+" not found.");
+		}
+		
+		// Getting the User info with the id
+		try {
+			dbUsers = userService.getUserById(userId);
+		} catch (NoSuchElementException e) {
+			// No user is found with userId
+			return createErrorResponse(HttpStatus.NOT_FOUND, 
+					"User ID: "+userId+" not found.");
 		}
 		
 		// Check if the room is available.
@@ -127,7 +178,7 @@ public class RoomService {
 			return roomCurrentlyUnavailable(roomId);
 		}
 		
-		// passed all checking points, will reserve the room for the user
+		// Passed all checking points, will reserve the room for the user
 		dbRoom.setAvailability(false);
 		dbRoom.setReservedBy(dbUsers);
 		roomRepository.save(dbRoom);
@@ -138,20 +189,22 @@ public class RoomService {
 		// This method is used when cancellation or after the customer has checked out
 		
 		// Getting the room info with the id
-		Room dbRoom = getRoomById(id);
+		Room dbRoom = null;
 		
-		// Check if the room ID is correct
-		if ( Objects.isNull(dbRoom) ) {
-			// room id is not found
-			return createErrorResponse(HttpStatus.NOT_FOUND,
-					"Room ID: "+id+" not found.");
+		// Getting the room info with the id
+		try {
+			dbRoom = getRoomById(id);
+		} catch (NoSuchElementException e) {
+			// No room is found with roomId
+			return createErrorResponse(HttpStatus.NOT_FOUND, 
+					"Room ID: "+ id +" not found.");
 		}
 		
 		// Check if the room is available
 		if ( dbRoom.isAvailability()) {
 			// room is already available
 			return createErrorResponse(HttpStatus.CONFLICT,
-					"Room ID: "+id+" is already available.");
+					"Room ID: "+ id +" is already available.");
 		}
 		
 		// passed all checking points, making the room available
